@@ -166,41 +166,59 @@ def detect_flower_regions(pil_img, max_boxes=4):
     S = hsv[:, :, 1] / 255.0
     V = hsv[:, :, 2] / 255.0
     
-    is_foliage = (H >= 0.18) & (H <= 0.45) & (S > 0.20) & (V < 0.85)
-    is_yellow = (H >= 0.08) & (H < 0.18) & (S > 0.40) & (V > 0.50)
-    is_purple = ((H >= 0.60) & (H <= 0.85)) & (S > 0.25) & (V > 0.35)
-    is_vibrant_red = (((H > 0.92) | (H < 0.04)) & (S > 0.55) & (V > 0.45))
-    is_white = (V > 0.70) & (S < 0.30) & (~is_foliage)
-    
-    petal_mask = is_yellow | is_purple | is_vibrant_red | is_white
+    is_foliage = (H >= 0.20) & (H <= 0.48) & (S > 0.20)
+    is_yellow = (H >= 0.08) & (H <= 0.18) & (S > 0.42) & (V > 0.45)
+    is_purple = ((H >= 0.68) & (H <= 0.92)) & (S > 0.22) & (V > 0.25)
+    is_red = (((H > 0.94) | (H < 0.05)) & (S > 0.48) & (V > 0.40))
     
     struct = ndimage.generate_binary_structure(2, 2)
-    clean_mask = ndimage.binary_opening(petal_mask, structure=struct, iterations=2)
+    yellow_dilated = ndimage.binary_dilation(is_yellow, structure=struct, iterations=5)
+    is_white_petal = (V > 0.70) & (S < 0.32) & (~is_foliage) & yellow_dilated
+    
+    floral_mask = is_yellow | is_purple | is_red | is_white_petal
+    clean_mask = ndimage.binary_opening(floral_mask, structure=struct, iterations=1)
     clean_mask = ndimage.binary_closing(clean_mask, structure=struct, iterations=2)
     
     labeled, num_features = ndimage.label(clean_mask)
     slices = ndimage.find_objects(labeled)
     
     boxes = []
-    min_area = (w * h) * 0.008
-    max_area = (w * h) * 0.90
+    min_area = max(250, int((w * h) * 0.0005))
+    max_area = int((w * h) * 0.85)
     
     for s in slices:
         y1, y2 = s[0].start, s[0].stop
         x1, x2 = s[1].start, s[1].stop
         bw, bh = x2 - x1, y2 - y1
         area = bw * bh
-        if min_area < area < max_area and bw > 25 and bh > 25:
-            aspect = max(bw / max(1, bh), bh / max(1, bw))
-            if aspect < 3.2:
-                pad = 10
-                bx1, by1 = max(0, x1 - pad), max(0, y1 - pad)
-                bx2, by2 = min(w, x2 + pad), min(h, y2 + pad)
-                petal_density = np.sum(petal_mask[by1:by2, bx1:bx2])
-                boxes.append([bx1, by1, bx2, by2, area, petal_density])
-                
-    if not boxes:
-        boxes.append([int(w * 0.10), int(h * 0.10), int(w * 0.90), int(h * 0.90), int(w * h * 0.6), 1000])
+        
+        if bw < 14 or bh < 14 or area < min_area or area > max_area:
+            continue
+            
+        aspect = max(bw / max(1, bh), bh / max(1, bw))
+        if aspect > 3.0:
+            continue
+            
+        floral_count = int(np.sum(floral_mask[y1:y2, x1:x2]))
+        if floral_count < 70:
+            continue
+            
+        touches_border = (x1 <= 10 or y1 <= 10 or x2 >= w - 10 or y2 >= h - 10)
+        if touches_border and (floral_count / area < 0.20):
+            continue
+            
+        if floral_count / area < 0.12:
+            continue
+            
+        pad_x = max(8, int(bw * 0.20))
+        pad_y = max(8, int(bh * 0.20))
+        bx1 = max(0, x1 - pad_x)
+        by1 = max(0, y1 - pad_y)
+        bx2 = min(w, x2 + pad_x)
+        by2 = min(h, y2 + pad_y)
+        box_area = (bx2 - bx1) * (by2 - by1)
+        
+        boxes.append([bx1, by1, bx2, by2, box_area, floral_count])
         
     boxes.sort(key=lambda x: x[5], reverse=True)
     
@@ -258,22 +276,25 @@ def resolve_botanical_taxonomy(crop_or_full_img, provider, species_meta_df, defa
     S = hsv[:, :, 1] / 255.0
     V = hsv[:, :, 2] / 255.0
     
-    yellow_score = float(np.sum((H >= 0.08) & (H < 0.18) & (S > 0.40) & (V > 0.50)))
-    purple_blue_score = float(np.sum(((H >= 0.60) & (H <= 0.85)) & (S > 0.25) & (V > 0.35)))
-    red_pink_score = float(np.sum((((H > 0.92) | (H < 0.04)) & (S > 0.55) & (V > 0.45))))
-    white_score = float(np.sum((V > 0.70) & (S < 0.30)))
+    is_foliage = (H >= 0.20) & (H <= 0.48) & (S > 0.20)
+    is_yellow_base = (H >= 0.08) & (H <= 0.18) & (S > 0.40) & (V > 0.45)
+    struct = ndimage.generate_binary_structure(2, 2)
+    yellow_dilated = ndimage.binary_dilation(is_yellow_base, structure=struct, iterations=5)
     
-    total_px = max(1, w * h)
-    if (white_score / total_px) > 0.10:
-        dominant_color = "white"
-    else:
-        color_map = {
-            "yellow": yellow_score,
-            "purple_blue": purple_blue_score,
-            "red_pink": red_pink_score,
-            "white": white_score
-        }
-        dominant_color = max(color_map, key=color_map.get)
+    yellow_score = float(np.sum(is_yellow_base))
+    purple_blue_score = float(np.sum(((H >= 0.65) & (H <= 0.92)) & (S > 0.22) & (V > 0.25)))
+    red_pink_score = float(np.sum((((H > 0.92) | (H < 0.04)) & (S > 0.48) & (V > 0.40))))
+    white_score = float(np.sum((V > 0.70) & (S < 0.32) & (~is_foliage) & yellow_dilated))
+    
+    color_map = {
+        "yellow": yellow_score,
+        "purple_blue": purple_blue_score,
+        "red_pink": red_pink_score,
+        "white": white_score
+    }
+    dominant_color = max(color_map, key=color_map.get)
+    if color_map[dominant_color] < 30:
+        dominant_color = "foliage"
         
     botanical_catalog = {
         ("CBN", "yellow"): ("Ranunculus", "Ranunculaceae"),
@@ -515,6 +536,8 @@ with col_right:
                     "ความมั่นใจ": f"{df['similarity']:.1f}%"
                 })
             st.dataframe(pd.DataFrame(flower_summary_data), use_container_width=True, hide_index=True)
+        elif enable_detection:
+            st.info("ไม่พบตำแหน่งดอกไม้บานเด่นชัดในแปลงสำรวจนี้ (ตรวจพบเรือนยอดใบและพืชคลุมดินธรรมชาติ)")
             
         st.markdown('<div style="font-weight: 700; font-size: 1.05rem; color: rgb(248, 250, 252); margin-top: 14px; margin-bottom: 6px;">Top-K Nearest Botanical Candidates (คลังพืชใกล้เคียง)</div>', unsafe_allow_html=True)
         
@@ -592,5 +615,5 @@ with col_left:
             caption_text = f"{image_info_text} | ตรวจพบตำแหน่งดอกไม้ {len(detected_flowers)} ตำแหน่ง"
         else:
             display_img = image_to_process
-            caption_text = image_info_text
+            caption_text = f"{image_info_text} | แปลงพืชธรรมชาติ (Vegetation Plot)"
         st.image(display_img, use_container_width=True, caption=caption_text)
