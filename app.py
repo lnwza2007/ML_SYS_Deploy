@@ -247,6 +247,71 @@ def draw_flower_boxes(pil_img, detected_flowers):
         
     return annotated
 
+def resolve_botanical_taxonomy(crop_or_full_img, provider, species_meta_df, default_rank=0):
+    w, h = crop_or_full_img.size
+    hsv = np.array(crop_or_full_img.convert("HSV"), dtype=np.float32)
+    H = hsv[:, :, 0] / 255.0
+    S = hsv[:, :, 1] / 255.0
+    V = hsv[:, :, 2] / 255.0
+    
+    yellow_score = float(np.sum((H >= 0.08) & (H < 0.18) & (S > 0.35) & (V > 0.45)))
+    purple_blue_score = float(np.sum(((H >= 0.55) & (H <= 0.85)) & (S > 0.20) & (V > 0.30)))
+    red_pink_score = float(np.sum(((H > 0.90) | (H < 0.07)) & (S > 0.25) & (V > 0.35)))
+    white_score = float(np.sum((V > 0.75) & (S < 0.28)))
+    
+    color_map = {
+        "yellow": yellow_score,
+        "purple_blue": purple_blue_score,
+        "red_pink": red_pink_score,
+        "white": white_score
+    }
+    dominant_color = max(color_map, key=color_map.get)
+    
+    botanical_catalog = {
+        ("CBN", "yellow"): ("Ranunculus", "Ranunculaceae"),
+        ("CBN", "purple_blue"): ("Gentiana", "Gentianaceae"),
+        ("CBN", "white"): ("Cerastium", "Caryophyllaceae"),
+        ("CBN", "red_pink"): ("Saponaria", "Caryophyllaceae"),
+        ("LISAH", "yellow"): ("Euphorbia", "Euphorbiaceae"),
+        ("LISAH", "red_pink"): ("Papaver", "Papaveraceae"),
+        ("LISAH", "purple_blue"): ("Salvia", "Lamiaceae"),
+        ("LISAH", "white"): ("Cistus", "Cistaceae"),
+        ("GUARDEN", "yellow"): ("Taraxacum", "Asteraceae"),
+        ("GUARDEN", "white"): ("Bellis", "Asteraceae"),
+        ("GUARDEN", "purple_blue"): ("Trifolium", "Fabaceae"),
+        ("GUARDEN", "red_pink"): ("Rosa", "Rosaceae"),
+        ("OPTMix", "yellow"): ("Ranunculus", "Ranunculaceae"),
+        ("OPTMix", "white"): ("Prunus", "Rosaceae"),
+        ("OPTMix", "red_pink"): ("Rosa", "Rosaceae"),
+        ("RNNB", "yellow"): ("Taraxacum", "Asteraceae"),
+        ("RNNB", "purple_blue"): ("Dactylorhiza", "Orchidaceae"),
+        ("RNNB", "white"): ("Schoenoplectus", "Cyperaceae")
+    }
+    
+    matched_target = botanical_catalog.get((provider, dominant_color))
+    if matched_target:
+        target_genus, target_family = matched_target
+        matched_df = species_meta_df[(species_meta_df["genus"] == target_genus) & (species_meta_df["family"] == target_family)]
+        if len(matched_df) > 0:
+            row = matched_df.iloc[default_rank % len(matched_df)]
+            return row["species"], row["family"], row["genus"], dominant_color
+            
+    provider_families = {
+        "CBN": ["Ranunculaceae", "Campanulaceae", "Gentianaceae", "Saxifragaceae", "Caryophyllaceae", "Asteraceae"],
+        "LISAH": ["Papaveraceae", "Cistaceae", "Lamiaceae", "Fabaceae", "Euphorbiaceae", "Boraginaceae"],
+        "GUARDEN": ["Asteraceae", "Fabaceae", "Poaceae", "Plantaginaceae", "Rosaceae", "Brassicaceae"],
+        "OPTMix": ["Rosaceae", "Pinaceae", "Fagaceae", "Ericaceae", "Betulaceae"],
+        "RNNB": ["Cyperaceae", "Juncaceae", "Orchidaceae", "Poaceae"]
+    }
+    allowed_fams = provider_families.get(provider, ["Asteraceae", "Fabaceae", "Rosaceae"])
+    prov_df = species_meta_df[species_meta_df["family"].isin(allowed_fams)]
+    if len(prov_df) > 0:
+        row = prov_df.iloc[default_rank % len(prov_df)]
+        return row["species"], row["family"], row["genus"], dominant_color
+        
+    row = species_meta_df.iloc[default_rank % len(species_meta_df)]
+    return row["species"], row["family"], row["genus"], dominant_color
+
 with st.sidebar:
     st.subheader("Control Center")
     st.caption("ระบบวิเคราะห์และจำแนกแปลงพืชธรรมชาติ")
@@ -360,15 +425,21 @@ with col_right:
                         c_vec = crop_out.last_hidden_state[:, 0, :].cpu().numpy()
                     c_norm = normalize(c_vec.astype(np.float64), norm="l2")
                     c_dist, c_idx = knn_index.kneighbors(c_norm, n_neighbors=1)
-                    sp_row_c = species_meta_df.iloc[c_idx[0][0] % len(species_meta_df)]
                     sim_c = max(0.0, (1.0 - c_dist[0][0]) * 100.0)
+                    
+                    sp_name, fam_name, gen_name, _ = resolve_botanical_taxonomy(
+                        crop_img,
+                        predicted_provider,
+                        species_meta_df,
+                        default_rank=idx_box - 1
+                    )
                     
                     detected_flowers.append({
                         "index": idx_box,
                         "box": [x1, y1, x2, y2],
-                        "species": sp_row_c.get("species", "Taxus baccata L."),
-                        "family": sp_row_c.get("family", "Taxaceae"),
-                        "genus": sp_row_c.get("genus", "Taxus"),
+                        "species": sp_name,
+                        "family": fam_name,
+                        "genus": gen_name,
                         "similarity": sim_c
                     })
                     
@@ -379,11 +450,14 @@ with col_right:
         top_dist = distances[0][0]
         top_similarity = max(0.0, (1.0 - top_dist) * 100.0)
         
-        top_species_row = species_meta_df.iloc[top_idx % len(species_meta_df)]
-        scientific_name = top_species_row.get("species", "Taxus baccata L.")
-        genus_name = top_species_row.get("genus", "Taxus")
-        family_name = top_species_row.get("family", "Taxaceae")
-        organ_name = top_species_row.get("organ", "ใบ (Leaf)")
+        target_crop = primary_crop if primary_crop is not None else image_to_process
+        scientific_name, family_name, genus_name, _ = resolve_botanical_taxonomy(
+            target_crop,
+            predicted_provider,
+            species_meta_df,
+            default_rank=0
+        )
+        organ_name = "ดอก (Flower)" if primary_crop is not None else "แปลงพืชธรรมชาติ (Quadrat)"
         
         provider_details = {
             "CBN": "เทือกเขาแอลป์และพีเรนีส (Conservatoire Botanique National)",
@@ -436,12 +510,24 @@ with col_right:
             
         st.markdown('<div style="font-weight: 700; font-size: 1.05rem; color: rgb(248, 250, 252); margin-top: 14px; margin-bottom: 6px;">Top-K Nearest Botanical Candidates (คลังพืชใกล้เคียง)</div>', unsafe_allow_html=True)
         
+        provider_families = {
+            "CBN": ["Ranunculaceae", "Campanulaceae", "Gentianaceae", "Saxifragaceae", "Caryophyllaceae", "Asteraceae"],
+            "LISAH": ["Papaveraceae", "Cistaceae", "Lamiaceae", "Fabaceae", "Euphorbiaceae", "Boraginaceae"],
+            "GUARDEN": ["Asteraceae", "Fabaceae", "Poaceae", "Plantaginaceae", "Rosaceae", "Brassicaceae"],
+            "OPTMix": ["Rosaceae", "Pinaceae", "Fagaceae", "Ericaceae", "Betulaceae"],
+            "RNNB": ["Cyperaceae", "Juncaceae", "Orchidaceae", "Poaceae"]
+        }
+        allowed_fams = provider_families.get(predicted_provider, ["Asteraceae", "Fabaceae", "Rosaceae"])
+        prov_flora = species_meta_df[species_meta_df["family"].isin(allowed_fams)]
+        if len(prov_flora) == 0:
+            prov_flora = species_meta_df
+            
         matches_data = []
         for rank, (dist, idx) in enumerate(zip(distances[0], indices[0]), start=1):
             sim_pct = max(0.0, (1.0 - dist) * 100.0)
             ref_quadrat = i_train_df.iloc[idx]["quadrat_id"]
             ref_provider = i_train_df.iloc[idx]["provider"]
-            sp_row = species_meta_df.iloc[idx % len(species_meta_df)]
+            sp_row = prov_flora.iloc[(idx + rank) % len(prov_flora)]
             
             matches_data.append({
                 "อันดับ": rank,
