@@ -1,0 +1,10 @@
+.venv/
+.DS_Store
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
+*.csv
+!species_ids.csv
+PlantCLEF2025_test_images/
+.git_subrepo/
+*.html
