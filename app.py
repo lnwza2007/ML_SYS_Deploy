@@ -166,23 +166,24 @@ def detect_flower_regions(pil_img, max_boxes=4):
     S = hsv[:, :, 1] / 255.0
     V = hsv[:, :, 2] / 255.0
     
-    is_foliage = (H >= 0.18) & (H <= 0.45) & (S > 0.25) & (V < 0.80)
-    is_yellow = (H >= 0.08) & (H < 0.18) & (S > 0.40) & (V > 0.55)
-    is_purple_red = ((H > 0.60) | (H < 0.06)) & (S > 0.20) & (V > 0.35)
-    is_white = (V > 0.85) & (S < 0.25) & (~is_foliage)
+    is_foliage = (H >= 0.18) & (H <= 0.45) & (S > 0.20) & (V < 0.85)
+    is_yellow = (H >= 0.08) & (H < 0.18) & (S > 0.40) & (V > 0.50)
+    is_purple = ((H >= 0.60) & (H <= 0.85)) & (S > 0.25) & (V > 0.35)
+    is_vibrant_red = (((H > 0.92) | (H < 0.04)) & (S > 0.55) & (V > 0.45))
+    is_white = (V > 0.70) & (S < 0.30) & (~is_foliage)
     
-    flower_mask = is_yellow | is_purple_red | is_white
+    petal_mask = is_yellow | is_purple | is_vibrant_red | is_white
     
     struct = ndimage.generate_binary_structure(2, 2)
-    clean_mask = ndimage.binary_dilation(flower_mask, structure=struct, iterations=3)
-    clean_mask = ndimage.binary_closing(clean_mask, structure=struct, iterations=3)
+    clean_mask = ndimage.binary_opening(petal_mask, structure=struct, iterations=2)
+    clean_mask = ndimage.binary_closing(clean_mask, structure=struct, iterations=2)
     
     labeled, num_features = ndimage.label(clean_mask)
     slices = ndimage.find_objects(labeled)
     
     boxes = []
     min_area = (w * h) * 0.008
-    max_area = (w * h) * 0.35
+    max_area = (w * h) * 0.90
     
     for s in slices:
         y1, y2 = s[0].start, s[0].stop
@@ -191,14 +192,17 @@ def detect_flower_regions(pil_img, max_boxes=4):
         area = bw * bh
         if min_area < area < max_area and bw > 25 and bh > 25:
             aspect = max(bw / max(1, bh), bh / max(1, bw))
-            if aspect < 3.5:
-                pad = 12
-                boxes.append([max(0, x1 - pad), max(0, y1 - pad), min(w, x2 + pad), min(h, y2 + pad), area])
+            if aspect < 3.2:
+                pad = 10
+                bx1, by1 = max(0, x1 - pad), max(0, y1 - pad)
+                bx2, by2 = min(w, x2 + pad), min(h, y2 + pad)
+                petal_density = np.sum(petal_mask[by1:by2, bx1:bx2])
+                boxes.append([bx1, by1, bx2, by2, area, petal_density])
                 
     if not boxes:
-        boxes.append([int(w * 0.15), int(h * 0.15), int(w * 0.85), int(h * 0.85), int(w * h * 0.5)])
+        boxes.append([int(w * 0.10), int(h * 0.10), int(w * 0.90), int(h * 0.90), int(w * h * 0.6), 1000])
         
-    boxes.sort(key=lambda x: x[4], reverse=True)
+    boxes.sort(key=lambda x: x[5], reverse=True)
     
     filtered = []
     for b in boxes:
@@ -211,11 +215,11 @@ def detect_flower_regions(pil_img, max_boxes=4):
             if ix2 > ix1 and iy2 > iy1:
                 inter = (ix2 - ix1) * (iy2 - iy1)
                 union = b[4] + f[4] - inter
-                if inter / union > 0.25:
+                if inter / union > 0.30:
                     overlap = True
                     break
         if not overlap:
-            filtered.append(b)
+            filtered.append(b[:5])
         if len(filtered) >= max_boxes:
             break
             
@@ -254,19 +258,23 @@ def resolve_botanical_taxonomy(crop_or_full_img, provider, species_meta_df, defa
     S = hsv[:, :, 1] / 255.0
     V = hsv[:, :, 2] / 255.0
     
-    yellow_score = float(np.sum((H >= 0.08) & (H < 0.18) & (S > 0.35) & (V > 0.45)))
-    purple_blue_score = float(np.sum(((H >= 0.55) & (H <= 0.85)) & (S > 0.20) & (V > 0.30)))
-    red_pink_score = float(np.sum(((H > 0.90) | (H < 0.07)) & (S > 0.25) & (V > 0.35)))
-    white_score = float(np.sum((V > 0.75) & (S < 0.28)))
+    yellow_score = float(np.sum((H >= 0.08) & (H < 0.18) & (S > 0.40) & (V > 0.50)))
+    purple_blue_score = float(np.sum(((H >= 0.60) & (H <= 0.85)) & (S > 0.25) & (V > 0.35)))
+    red_pink_score = float(np.sum((((H > 0.92) | (H < 0.04)) & (S > 0.55) & (V > 0.45))))
+    white_score = float(np.sum((V > 0.70) & (S < 0.30)))
     
-    color_map = {
-        "yellow": yellow_score,
-        "purple_blue": purple_blue_score,
-        "red_pink": red_pink_score,
-        "white": white_score
-    }
-    dominant_color = max(color_map, key=color_map.get)
-    
+    total_px = max(1, w * h)
+    if (white_score / total_px) > 0.10:
+        dominant_color = "white"
+    else:
+        color_map = {
+            "yellow": yellow_score,
+            "purple_blue": purple_blue_score,
+            "red_pink": red_pink_score,
+            "white": white_score
+        }
+        dominant_color = max(color_map, key=color_map.get)
+        
     botanical_catalog = {
         ("CBN", "yellow"): ("Ranunculus", "Ranunculaceae"),
         ("CBN", "purple_blue"): ("Gentiana", "Gentianaceae"),
@@ -275,7 +283,7 @@ def resolve_botanical_taxonomy(crop_or_full_img, provider, species_meta_df, defa
         ("LISAH", "yellow"): ("Euphorbia", "Euphorbiaceae"),
         ("LISAH", "red_pink"): ("Papaver", "Papaveraceae"),
         ("LISAH", "purple_blue"): ("Salvia", "Lamiaceae"),
-        ("LISAH", "white"): ("Cistus", "Cistaceae"),
+        ("LISAH", "white"): ("Cerastium", "Caryophyllaceae"),
         ("GUARDEN", "yellow"): ("Taraxacum", "Asteraceae"),
         ("GUARDEN", "white"): ("Bellis", "Asteraceae"),
         ("GUARDEN", "purple_blue"): ("Trifolium", "Fabaceae"),
@@ -298,7 +306,7 @@ def resolve_botanical_taxonomy(crop_or_full_img, provider, species_meta_df, defa
             
     provider_families = {
         "CBN": ["Ranunculaceae", "Campanulaceae", "Gentianaceae", "Saxifragaceae", "Caryophyllaceae", "Asteraceae"],
-        "LISAH": ["Papaveraceae", "Cistaceae", "Lamiaceae", "Fabaceae", "Euphorbiaceae", "Boraginaceae"],
+        "LISAH": ["Caryophyllaceae", "Papaveraceae", "Cistaceae", "Lamiaceae", "Fabaceae", "Euphorbiaceae", "Boraginaceae"],
         "GUARDEN": ["Asteraceae", "Fabaceae", "Poaceae", "Plantaginaceae", "Rosaceae", "Brassicaceae"],
         "OPTMix": ["Rosaceae", "Pinaceae", "Fagaceae", "Ericaceae", "Betulaceae"],
         "RNNB": ["Cyperaceae", "Juncaceae", "Orchidaceae", "Poaceae"]
