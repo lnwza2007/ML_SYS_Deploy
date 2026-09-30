@@ -1,7 +1,14 @@
 import os
 import time
+import re
 import warnings
 warnings.filterwarnings("ignore")
+
+def render_html(html_str: str):
+    """Render raw HTML cleanly without Markdown indentation code-block parsing bugs."""
+    cleaned = re.sub(r'^[ 	]+', '', html_str, flags=re.MULTILINE).strip()
+    st.markdown(cleaned, unsafe_allow_html=True)
+
 
 import streamlit as st
 import numpy as np
@@ -581,12 +588,12 @@ def resolve_botanical_taxonomy(crop_or_full_img, provider, species_meta_df, defa
     return row["species"], row["family"], row["genus"], dominant_color
 
 with st.sidebar:
-    st.markdown("""
-    <div style="padding-bottom: 12px; margin-bottom: 12px; border-bottom: 1px solid #30363d;">
+    render_html("""
+<div style="padding-bottom: 12px; margin-bottom: 12px; border-bottom: 1px solid #30363d;">
         <div style="font-size: 0.95rem; font-weight: 600; color: #e6edf3; letter-spacing: -0.01em;">PlantCLEF Control Panel</div>
         <div style="font-size: 0.74rem; color: #8b949e; margin-top: 2px;">Vegetation Quadrat Diagnostic System</div>
     </div>
-    """, unsafe_allow_html=True)
+""")
     
     st.markdown('<div class="sidebar-section-title">Image Acquisition Source</div>', unsafe_allow_html=True)
     input_mode = st.radio(
@@ -612,8 +619,8 @@ with st.sidebar:
     st.markdown('<div class="sidebar-section-title">Taxonomic Retrieval Depth</div>', unsafe_allow_html=True)
     top_k = st.slider("Top-K Candidate Depth:", min_value=3, max_value=8, value=5)
     
-    st.markdown("""
-    <div class="audit-box">
+    render_html("""
+<div class="audit-box">
         <div class="audit-header">Operator & System Log</div>
         <div class="audit-item">
             <span class="audit-label">Operator</span>
@@ -636,10 +643,10 @@ with st.sidebar:
             <span class="audit-value">Production v1.4</span>
         </div>
     </div>
-    """, unsafe_allow_html=True)
+""")
 
 # Workbench Header Bar (IDE / Scientific Data Workbench style)
-st.markdown("""
+render_html("""
 <div class="workbench-header">
     <div class="workbench-title-group">
         <span class="workbench-title">Plant Biodiversity Diagnostic Workbench</span>
@@ -651,7 +658,7 @@ st.markdown("""
         <span>PIPELINE: ONLINE</span>
     </div>
 </div>
-""", unsafe_allow_html=True)
+""")
 
 col_left, col_right = st.columns([1.1, 1.2], gap="large")
 
@@ -680,12 +687,12 @@ with col_left:
             st.warning("Selected sample image not found in repository.")
 
     if image_to_process is None:
-        st.markdown("""
-        <div class="empty-viewport">
+        render_html("""
+<div class="empty-viewport">
             <div class="empty-title">No Vegetation Plot Loaded</div>
             <div class="empty-desc">Select a standard reference plot or upload a field observation image from the control panel.</div>
         </div>
-        """, unsafe_allow_html=True)
+""")
 
 with col_right:
     st.markdown('<div class="panel-header"><span>Diagnostic Analysis // Telemetry</span><span class="mono" style="font-size: 0.72rem; color: #8b949e;">Status: Ready</span></div>', unsafe_allow_html=True)
@@ -771,8 +778,8 @@ with col_right:
         }
         habitat_desc = provider_details.get(predicted_provider, "Standard Survey Plots")
         
-        st.markdown(f"""
-        <div class="station-card">
+        render_html(f"""
+<div class="station-card">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
                 <div>
                     <span class="tag-chip tag-chip-active">PRIMARY TAXONOMIC RESOLUTION</span>
@@ -803,7 +810,7 @@ with col_right:
                 <span class="data-value-mono">Cosine NearestNeighbors (L2-Normalized)</span>
             </div>
         </div>
-        """, unsafe_allow_html=True)
+""")
         st.progress(min(1.0, top_similarity / 100.0))
         
         if detected_flowers:
@@ -855,8 +862,8 @@ with col_right:
         matches_df = pd.DataFrame(matches_data)
         st.dataframe(matches_df, use_container_width=True, hide_index=True)
         
-        st.markdown(f"""
-        <div style="margin-top: 14px;">
+        render_html(f"""
+<div style="margin-top: 14px;">
             <div class="panel-header"><span>System Telemetry HUD</span><span class="mono" style="font-size: 0.72rem;">Online</span></div>
             <div class="hud-grid">
                 <div class="hud-tile">
@@ -881,14 +888,14 @@ with col_right:
                 </div>
             </div>
         </div>
-        """, unsafe_allow_html=True)
+""")
     else:
-        st.markdown("""
-        <div style="border: 1px dashed var(--border-color); border-radius: 6px; padding: 40px 20px; text-align: center; color: var(--text-secondary); background-color: var(--bg-surface);">
+        render_html("""
+<div style="border: 1px dashed var(--border-color); border-radius: 6px; padding: 40px 20px; text-align: center; color: var(--text-secondary); background-color: var(--bg-surface);">
             <div style="font-size: 0.9rem; font-weight: 600; color: var(--text-primary);">Awaiting Input Stream</div>
             <div style="font-size: 0.78rem; margin-top: 4px; color: var(--text-tertiary);">Diagnostic evaluation and telemetry modules will initialize upon image receipt.</div>
         </div>
-        """, unsafe_allow_html=True)
+""")
 
 with col_left:
     if image_to_process is not None:
