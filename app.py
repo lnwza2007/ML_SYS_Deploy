@@ -161,21 +161,21 @@ def load_model_and_database():
 
 def detect_flower_regions(pil_img, max_boxes=4):
     w, h = pil_img.size
+    rgb = np.array(pil_img.convert("RGB"), dtype=np.float32)
+    R, G, B = rgb[:, :, 0], rgb[:, :, 1], rgb[:, :, 2]
     hsv = np.array(pil_img.convert("HSV"), dtype=np.float32)
-    H = hsv[:, :, 0] / 255.0
-    S = hsv[:, :, 1] / 255.0
-    V = hsv[:, :, 2] / 255.0
+    H, S, V = hsv[:, :, 0] / 255.0, hsv[:, :, 1] / 255.0, hsv[:, :, 2] / 255.0
     
     is_foliage = (H >= 0.20) & (H <= 0.48) & (S > 0.20)
-    is_yellow = (H >= 0.08) & (H <= 0.18) & (S > 0.42) & (V > 0.45)
-    is_purple = ((H >= 0.68) & (H <= 0.92)) & (S > 0.22) & (V > 0.25)
+    is_bright_yellow = (H >= 0.08) & (H <= 0.18) & (S > 0.38) & (V > 0.60) & (R > 160) & (G > 140)
+    is_purple = ((H >= 0.65) & (H <= 0.92)) & (S > 0.22) & (V > 0.25)
     is_red = (((H > 0.94) | (H < 0.05)) & (S > 0.48) & (V > 0.40))
     
     struct = ndimage.generate_binary_structure(2, 2)
-    yellow_dilated = ndimage.binary_dilation(is_yellow, structure=struct, iterations=5)
-    is_white_petal = (V > 0.70) & (S < 0.32) & (~is_foliage) & yellow_dilated
+    yellow_dilated = ndimage.binary_dilation(is_bright_yellow, structure=struct, iterations=16)
+    is_white_petal = (V > 0.60) & (S < 0.35) & (R > 130) & (G > 130) & (B > 120) & (~is_foliage) & yellow_dilated
     
-    floral_mask = is_yellow | is_purple | is_red | is_white_petal
+    floral_mask = is_bright_yellow | is_purple | is_red | is_white_petal
     clean_mask = ndimage.binary_opening(floral_mask, structure=struct, iterations=1)
     clean_mask = ndimage.binary_closing(clean_mask, structure=struct, iterations=2)
     
@@ -210,8 +210,8 @@ def detect_flower_regions(pil_img, max_boxes=4):
         if floral_count / area < 0.12:
             continue
             
-        pad_x = max(8, int(bw * 0.20))
-        pad_y = max(8, int(bh * 0.20))
+        pad_x = max(10, int(bw * 0.20))
+        pad_y = max(10, int(bh * 0.20))
         bx1 = max(0, x1 - pad_x)
         by1 = max(0, y1 - pad_y)
         bx2 = min(w, x2 + pad_x)
@@ -271,29 +271,30 @@ def draw_flower_boxes(pil_img, detected_flowers):
 
 def resolve_botanical_taxonomy(crop_or_full_img, provider, species_meta_df, default_rank=0):
     w, h = crop_or_full_img.size
+    rgb = np.array(crop_or_full_img.convert("RGB"), dtype=np.float32)
+    R, G, B = rgb[:, :, 0], rgb[:, :, 1], rgb[:, :, 2]
     hsv = np.array(crop_or_full_img.convert("HSV"), dtype=np.float32)
-    H = hsv[:, :, 0] / 255.0
-    S = hsv[:, :, 1] / 255.0
-    V = hsv[:, :, 2] / 255.0
+    H, S, V = hsv[:, :, 0] / 255.0, hsv[:, :, 1] / 255.0, hsv[:, :, 2] / 255.0
     
     is_foliage = (H >= 0.20) & (H <= 0.48) & (S > 0.20)
-    is_yellow_base = (H >= 0.08) & (H <= 0.18) & (S > 0.40) & (V > 0.45)
-    struct = ndimage.generate_binary_structure(2, 2)
-    yellow_dilated = ndimage.binary_dilation(is_yellow_base, structure=struct, iterations=5)
+    is_bright_yellow = (H >= 0.08) & (H <= 0.18) & (S > 0.38) & (V > 0.65) & (R > 160) & (G > 140)
+    is_purple = ((H >= 0.65) & (H <= 0.92)) & (S > 0.22) & (V > 0.25)
+    is_red = (((H > 0.94) | (H < 0.05)) & (S > 0.48) & (V > 0.40))
+    is_white = (V > 0.60) & (S < 0.35) & (R > 130) & (G > 130) & (B > 120) & (~is_foliage)
     
-    yellow_score = float(np.sum(is_yellow_base))
-    purple_blue_score = float(np.sum(((H >= 0.65) & (H <= 0.92)) & (S > 0.22) & (V > 0.25)))
-    red_pink_score = float(np.sum((((H > 0.92) | (H < 0.04)) & (S > 0.48) & (V > 0.40))))
-    white_score = float(np.sum((V > 0.70) & (S < 0.32) & (~is_foliage) & yellow_dilated))
+    y_score = float(np.sum(is_bright_yellow))
+    w_score = float(np.sum(is_white))
+    p_score = float(np.sum(is_purple))
+    r_score = float(np.sum(is_red))
     
     color_map = {
-        "yellow": yellow_score,
-        "purple_blue": purple_blue_score,
-        "red_pink": red_pink_score,
-        "white": white_score
+        "yellow": y_score,
+        "purple_blue": p_score,
+        "red_pink": r_score,
+        "white": w_score
     }
     dominant_color = max(color_map, key=color_map.get)
-    if color_map[dominant_color] < 30:
+    if color_map[dominant_color] < 50:
         dominant_color = "foliage"
         
     botanical_catalog = {
