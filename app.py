@@ -15,369 +15,343 @@ from sklearn.neighbors import NearestNeighbors
 from sklearn.preprocessing import normalize
 
 st.set_page_config(
-    page_title="PlantCLEF AI - Scientific Biodiversity Dashboard",
+    page_title="PlantCLEF Scientific Workbench",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
 st.markdown("""
 <style>
-    @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap');
-    
-    * {
-        font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
+
+    :root {
+        --bg-canvas: #0d1117;
+        --bg-surface: #161b22;
+        --bg-surface-hover: #1f242c;
+        --border-color: #30363d;
+        --border-subtle: #21262d;
+        --text-primary: #e6edf3;
+        --text-secondary: #8b949e;
+        --text-tertiary: #6e7681;
+        --accent-green: #2ea043;
+        --accent-green-text: #3fb950;
+        --accent-blue: #58a6ff;
     }
-    
-    code, .mono {
-        font-family: 'JetBrains Mono', monospace;
+
+    * {
+        font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+        -webkit-font-smoothing: antialiased;
+    }
+
+    code, .mono, [data-testid="stMetricValue"] {
+        font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace !important;
     }
 
     .stApp {
-        background: radial-gradient(circle at 10% 5%, rgba(16, 185, 129, 0.09) 0%, transparent 40%),
-                    radial-gradient(circle at 90% 12%, rgba(6, 182, 212, 0.08) 0%, transparent 40%),
-                    #090e17;
-        color: rgb(248, 250, 252);
+        background-color: var(--bg-canvas) !important;
+        color: var(--text-primary) !important;
     }
-    
+
     header, [data-testid="stHeader"] {
-        background-color: transparent !important;
+        background-color: var(--bg-canvas) !important;
+        border-bottom: 1px solid var(--border-subtle) !important;
     }
-    
-    /* Sleek Sidebar Glassmorphism */
+
+    /* Sidebar: Minimalist Scientific Tool Panel */
     section[data-testid="stSidebar"] {
-        background: linear-gradient(180deg, rgba(13, 22, 38, 0.92) 0%, rgba(9, 14, 23, 0.98) 100%) !important;
-        border-right: 1px solid rgba(56, 189, 248, 0.15) !important;
-        backdrop-filter: blur(14px);
+        background-color: #12151c !important;
+        border-right: 1px solid var(--border-color) !important;
     }
-    
-    /* Hide unwanted default tags */
+
+    /* Hide Streamlit default decorations */
     .viewerBadge_container__1QSob,
     header [data-testid="stDecoration"] {
         display: none !important;
     }
-    
-    /* Sidebar Components */
-    .sidebar-brand-card {
-        background: linear-gradient(135deg, rgba(16, 185, 129, 0.15) 0%, rgba(6, 182, 212, 0.08) 100%);
-        border: 1px solid rgba(52, 211, 153, 0.35);
-        border-radius: 14px;
-        padding: 16px;
-        margin-bottom: 16px;
-        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
-    }
-    
-    .sidebar-brand-title {
-        font-size: 1.25rem;
-        font-weight: 800;
-        color: #f8fafc;
+
+    /* Top Workbench Header Bar */
+    .workbench-header {
         display: flex;
+        justify-content: space-between;
         align-items: center;
-        gap: 8px;
-        letter-spacing: -0.3px;
-    }
-    
-    .sidebar-brand-sub {
-        font-size: 0.78rem;
-        color: #94a3b8;
-        margin-top: 4px;
-    }
-    
-    .sidebar-section-card {
-        background: rgba(17, 28, 48, 0.7);
-        border: 1px solid rgba(56, 189, 248, 0.14);
-        border-radius: 12px;
-        padding: 12px 14px;
-        margin-bottom: 12px;
-        box-shadow: 0 4px 14px rgba(0, 0, 0, 0.2);
-    }
-    
-    .sidebar-section-label {
-        font-size: 0.8rem;
-        font-weight: 700;
-        color: #38bdf8;
-        text-transform: uppercase;
-        letter-spacing: 0.5px;
-        margin-bottom: 8px;
-        display: flex;
-        align-items: center;
-        gap: 6px;
+        padding-bottom: 14px;
+        margin-bottom: 18px;
+        border-bottom: 1px solid var(--border-color);
     }
 
-    /* Developer Profile Card */
-    .dev-card {
-        background: linear-gradient(135deg, rgba(15, 25, 42, 0.8) 0%, rgba(21, 34, 56, 0.8) 100%);
-        border: 1px solid rgba(16, 185, 129, 0.25);
-        border-radius: 12px;
-        padding: 14px;
-        margin-top: 14px;
-    }
-    
-    .dev-title {
-        font-size: 0.75rem;
-        font-weight: 700;
-        color: #34d399;
-        text-transform: uppercase;
-        letter-spacing: 0.6px;
-        margin-bottom: 10px;
-        display: flex;
-        align-items: center;
-        gap: 6px;
-    }
-    
-    .dev-item {
+    .workbench-title-group {
         display: flex;
         align-items: center;
         gap: 10px;
-        margin-bottom: 8px;
-    }
-    
-    .dev-avatar {
-        width: 32px;
-        height: 32px;
-        border-radius: 50%;
-        background: linear-gradient(135deg, #10b981, #06b6d4);
-        color: #0b1320;
-        font-weight: 800;
-        font-size: 0.75rem;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        box-shadow: 0 0 10px rgba(16, 185, 129, 0.4);
-    }
-    
-    .dev-name {
-        font-size: 0.85rem;
-        font-weight: 600;
-        color: #f1f5f9;
-        line-height: 1.2;
-    }
-    
-    .dev-id {
-        font-size: 0.72rem;
-        color: #94a3b8;
-        font-family: 'JetBrains Mono', monospace;
     }
 
-    /* Widget Styling Overrides */
-    div[data-baseweb="slider"] div[role="slider"] {
-        background: #10b981 !important;
-        border: 2px solid #34d399 !important;
-        box-shadow: 0 0 12px rgba(16, 185, 129, 0.6) !important;
-    }
-    
-    div[data-baseweb="slider"] div[data-testid="stSliderTickBar"] + div {
-        background: linear-gradient(90deg, #10b981, #06b6d4) !important;
-    }
-    
-    div[data-baseweb="radio"] label {
-        background: rgba(15, 23, 42, 0.5);
-        border: 1px solid rgba(56, 189, 248, 0.12);
-        border-radius: 8px;
-        padding: 6px 10px;
-        margin-bottom: 6px;
-        transition: all 0.2s ease;
-    }
-    
-    div[data-baseweb="radio"] label:hover {
-        border-color: rgba(52, 211, 153, 0.4);
-        background: rgba(16, 185, 129, 0.08);
-    }
-    
-    /* Hero Header */
-    .hero-banner {
-        background: linear-gradient(135deg, rgba(17, 28, 48, 0.75) 0%, rgba(11, 19, 32, 0.9) 100%);
-        border: 1px solid rgba(56, 189, 248, 0.2);
-        border-radius: 16px;
-        padding: 22px 26px;
-        margin-bottom: 22px;
-        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
-        position: relative;
-        overflow: hidden;
-    }
-    
-    .hero-banner::after {
-        content: '';
-        position: absolute;
-        top: 0;
-        left: 0;
-        right: 0;
-        height: 2px;
-        background: linear-gradient(90deg, #10b981, #06b6d4, #a855f7);
-    }
-    
-    .hero-title {
-        font-size: 2.1rem;
-        font-weight: 800;
-        color: #ffffff;
-        letter-spacing: -0.6px;
-        margin-top: 6px;
-        margin-bottom: 4px;
-        line-height: 1.2;
-    }
-    
-    .hero-sub {
-        font-size: 0.92rem;
-        color: #94a3b8;
-        max-width: 800px;
-    }
-    
-    .hero-tags {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 8px;
-        margin-top: 12px;
-    }
-    
-    .hero-tag {
-        font-size: 0.75rem;
+    .workbench-title {
+        font-size: 1.15rem;
         font-weight: 600;
-        padding: 4px 10px;
-        border-radius: 20px;
-        display: flex;
+        color: var(--text-primary);
+        letter-spacing: -0.01em;
+    }
+
+    .workbench-tag {
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 0.7rem;
+        font-weight: 500;
+        color: var(--text-secondary);
+        background: #1c2128;
+        padding: 2px 7px;
+        border: 1px solid var(--border-color);
+        border-radius: 4px;
+    }
+
+    .status-indicator {
+        display: inline-flex;
         align-items: center;
-        gap: 6px;
+        gap: 7px;
+        font-size: 0.74rem;
+        color: var(--text-secondary);
+        font-family: 'JetBrains Mono', monospace;
+        background: var(--bg-surface);
+        padding: 4px 10px;
+        border: 1px solid var(--border-color);
+        border-radius: 4px;
     }
-    
-    .tag-green {
-        background: rgba(16, 185, 129, 0.15);
-        color: #34d399;
-        border: 1px solid rgba(16, 185, 129, 0.35);
-    }
-    
-    .tag-blue {
-        background: rgba(6, 182, 212, 0.15);
-        color: #22d3ee;
-        border: 1px solid rgba(6, 182, 212, 0.35);
-    }
-    
-    .tag-purple {
-        background: rgba(168, 85, 247, 0.15);
-        color: #c084fc;
-        border: 1px solid rgba(168, 85, 247, 0.35);
-    }
-    
-    .pulse-dot {
-        width: 8px;
-        height: 8px;
+
+    .status-dot {
+        width: 6px;
+        height: 6px;
+        background-color: var(--accent-green);
         border-radius: 50%;
-        background-color: #34d399;
-        box-shadow: 0 0 8px #34d399;
         display: inline-block;
     }
 
-    /* Cards & Containers */
-    .sci-card {
-        background: linear-gradient(135deg, rgba(21, 34, 56, 0.7) 0%, rgba(15, 25, 42, 0.8) 100%);
-        border: 1px solid rgba(56, 189, 248, 0.18);
-        border-radius: 14px;
-        padding: 18px 22px;
-        margin-bottom: 16px;
-        box-shadow: 0 6px 24px rgba(0, 0, 0, 0.3);
-        backdrop-filter: blur(10px);
-        transition: transform 0.2s ease, border-color 0.2s ease;
+    /* Workstation Card */
+    .station-card {
+        background-color: var(--bg-surface);
+        border: 1px solid var(--border-color);
+        border-radius: 6px;
+        padding: 16px 18px;
+        margin-bottom: 14px;
     }
-    
-    .sci-card:hover {
-        border-color: rgba(52, 211, 153, 0.35);
+
+    .panel-header {
+        font-size: 0.78rem;
+        font-weight: 600;
+        color: var(--text-secondary);
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        margin-bottom: 12px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
     }
-    
-    .species-name {
-        font-size: 1.7rem;
-        font-weight: 800;
-        color: #34d399;
+
+    /* Structured Key-Value Data Rows */
+    .data-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: baseline;
+        padding: 7px 0;
+        border-bottom: 1px solid var(--border-subtle);
+        font-size: 0.85rem;
+    }
+
+    .data-row:last-child {
+        border-bottom: none;
+    }
+
+    .data-label {
+        color: var(--text-secondary);
+        font-size: 0.82rem;
+        font-weight: 400;
+    }
+
+    .data-value {
+        color: var(--text-primary);
+        font-weight: 500;
+        text-align: right;
+    }
+
+    .data-value-mono {
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 0.82rem;
+        color: var(--text-primary);
+    }
+
+    .species-heading {
+        font-size: 1.45rem;
+        font-weight: 600;
+        color: var(--text-primary);
         font-style: italic;
-        margin-top: 6px;
-        margin-bottom: 4px;
-        letter-spacing: -0.3px;
-        text-shadow: 0 0 20px rgba(52, 211, 153, 0.25);
+        letter-spacing: -0.01em;
+        margin: 4px 0 2px 0;
     }
-    
-    .badge-sci {
+
+    .species-meta-sub {
+        font-size: 0.78rem;
+        color: var(--text-secondary);
+        margin-bottom: 12px;
+    }
+
+    /* Minimal Chips */
+    .tag-chip {
         display: inline-flex;
         align-items: center;
-        padding: 4px 10px;
-        border-radius: 6px;
-        font-size: 0.78rem;
-        font-weight: 700;
-        margin-right: 6px;
-        margin-bottom: 6px;
-        letter-spacing: 0.3px;
-    }
-    
-    .badge-emerald {
-        background-color: rgba(16, 185, 129, 0.18);
-        color: rgb(52, 211, 153);
-        border: 1px solid rgba(16, 185, 129, 0.4);
-    }
-    
-    .badge-cyan {
-        background-color: rgba(6, 182, 212, 0.18);
-        color: rgb(34, 211, 238);
-        border: 1px solid rgba(6, 182, 212, 0.4);
-    }
-    
-    .badge-purple {
-        background-color: rgba(168, 85, 247, 0.18);
-        color: rgb(192, 132, 252);
-        border: 1px solid rgba(168, 85, 247, 0.4);
-    }
-    
-    /* Telemetry HUD Grid */
-    .telemetry-grid {
-        display: grid;
-        grid-template-columns: repeat(4, 1fr);
-        gap: 12px;
-        margin-top: 10px;
-    }
-    
-    .telemetry-card {
-        background: rgba(13, 22, 38, 0.7);
-        border: 1px solid rgba(56, 189, 248, 0.12);
-        border-radius: 10px;
-        padding: 12px 14px;
-        position: relative;
-        overflow: hidden;
-        transition: transform 0.2s ease;
-    }
-    
-    .telemetry-card:hover {
-        transform: translateY(-2px);
-        border-color: rgba(56, 189, 248, 0.3);
-    }
-    
-    .telemetry-card::before {
-        content: '';
-        position: absolute;
-        top: 0;
-        left: 0;
-        right: 0;
-        height: 2px;
-        background: linear-gradient(90deg, #10b981, #06b6d4);
-    }
-    
-    .telemetry-title {
+        padding: 2px 7px;
+        border-radius: 4px;
         font-size: 0.72rem;
-        color: rgb(148, 163, 184);
-        text-transform: uppercase;
-        font-weight: 700;
-        letter-spacing: 0.5px;
-    }
-    
-    .telemetry-value {
-        font-size: 1.2rem;
-        font-weight: 800;
-        color: rgb(52, 211, 153);
-        margin-top: 4px;
+        font-weight: 500;
+        background: #1c2128;
+        color: var(--text-secondary);
+        border: 1px solid var(--border-color);
+        margin-right: 6px;
         font-family: 'JetBrains Mono', monospace;
     }
-    
-    .telemetry-sub {
-        font-size: 0.72rem;
-        color: rgb(100, 116, 139);
+
+    .tag-chip-active {
+        background: rgba(46, 160, 67, 0.12);
+        color: var(--accent-green-text);
+        border-color: rgba(46, 160, 67, 0.4);
+    }
+
+    /* Telemetry HUD Grid Minimal */
+    .hud-grid {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 8px;
+        margin-top: 10px;
+    }
+
+    .hud-tile {
+        background: var(--bg-surface);
+        border: 1px solid var(--border-color);
+        border-radius: 4px;
+        padding: 10px 12px;
+    }
+
+    .hud-tile-title {
+        font-size: 0.68rem;
+        font-weight: 600;
+        color: var(--text-secondary);
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        margin-bottom: 4px;
+    }
+
+    .hud-tile-value {
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 1.05rem;
+        font-weight: 600;
+        color: var(--text-primary);
+    }
+
+    .hud-tile-meta {
+        font-size: 0.68rem;
+        color: var(--text-tertiary);
         margin-top: 2px;
     }
-</style>
 
+    /* Empty State Frame */
+    .empty-viewport {
+        border: 1px dashed var(--border-color);
+        border-radius: 6px;
+        padding: 55px 20px;
+        text-align: center;
+        color: var(--text-secondary);
+        background: #12151c;
+    }
+
+    .empty-title {
+        font-size: 0.95rem;
+        font-weight: 600;
+        color: var(--text-primary);
+        margin-bottom: 4px;
+    }
+
+    .empty-desc {
+        font-size: 0.8rem;
+        color: var(--text-tertiary);
+    }
+
+    /* Sidebar Custom Layout */
+    .sidebar-section-title {
+        font-size: 0.72rem;
+        font-weight: 600;
+        color: var(--text-secondary);
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        margin: 14px 0 6px 0;
+    }
+
+    .audit-box {
+        background: #161b22;
+        border: 1px solid var(--border-color);
+        border-radius: 4px;
+        padding: 12px;
+        margin-top: 24px;
+    }
+
+    .audit-header {
+        font-size: 0.68rem;
+        font-weight: 600;
+        color: var(--text-secondary);
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        margin-bottom: 8px;
+        border-bottom: 1px solid var(--border-subtle);
+        padding-bottom: 4px;
+    }
+
+    .audit-item {
+        display: flex;
+        justify-content: space-between;
+        font-size: 0.74rem;
+        margin-bottom: 4px;
+    }
+
+    .audit-label {
+        color: var(--text-tertiary);
+    }
+
+    .audit-value {
+        color: var(--text-secondary);
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 0.72rem;
+    }
+
+    /* Sliders, radios, and inputs */
+    div[data-baseweb="slider"] div[role="slider"] {
+        background-color: var(--accent-green) !important;
+        border: 1px solid var(--accent-green-text) !important;
+        box-shadow: none !important;
+        width: 14px !important;
+        height: 14px !important;
+    }
+
+    div[data-baseweb="slider"] div[data-testid="stSliderTickBar"] + div {
+        background: var(--accent-green) !important;
+    }
+
+    div[data-baseweb="radio"] label {
+        border-radius: 4px;
+        padding: 6px 8px;
+        transition: background 0.15s ease;
+    }
+
+    div[data-baseweb="radio"] label:hover {
+        background: #1c2128;
+    }
+
+    /* Progress bar */
+    .stProgress > div > div > div > div {
+        background-color: var(--accent-green) !important;
+    }
+
+    /* Dataframe clean styling */
+    [data-testid="stDataFrame"] {
+        border: 1px solid var(--border-color);
+        border-radius: 4px;
+    }
+</style>
 """, unsafe_allow_html=True)
 
 @st.cache_resource
@@ -444,33 +418,27 @@ def detect_flower_regions(pil_img, max_boxes=4):
     clean_mask = ndimage.binary_closing(clean_mask, structure=struct, iterations=2)
     
     labeled, num_features = ndimage.label(clean_mask)
+    if num_features == 0:
+        return []
+        
     slices = ndimage.find_objects(labeled)
-    
     boxes = []
-    min_area = max(250, int((w * h) * 0.0005))
-    max_area = int((w * h) * 0.85)
+    min_dim = min(w, h)
     
-    for s in slices:
-        y1, y2 = s[0].start, s[0].stop
-        x1, x2 = s[1].start, s[1].stop
-        bw, bh = x2 - x1, y2 - y1
+    for sl in slices:
+        sy, sx = sl
+        y1, y2 = sy.start, sy.stop
+        x1, x2 = sx.start, sx.stop
+        bw = x2 - x1
+        bh = y2 - y1
         area = bw * bh
         
-        if bw < 14 or bh < 14 or area < min_area or area > max_area:
+        if bw < min_dim * 0.02 or bh < min_dim * 0.02:
+            continue
+        if bw > min_dim * 0.85 or bh > min_dim * 0.85:
             continue
             
-        aspect = max(bw / max(1, bh), bh / max(1, bw))
-        if aspect > 3.0:
-            continue
-            
-        floral_count = int(np.sum(floral_mask[y1:y2, x1:x2]))
-        if floral_count < 70:
-            continue
-            
-        touches_border = (x1 <= 10 or y1 <= 10 or x2 >= w - 10 or y2 >= h - 10)
-        if touches_border and (floral_count / area < 0.20):
-            continue
-            
+        floral_count = np.sum(clean_mask[y1:y2, x1:x2])
         if floral_count / area < 0.12:
             continue
             
@@ -510,12 +478,14 @@ def detect_flower_regions(pil_img, max_boxes=4):
 def draw_flower_boxes(pil_img, detected_flowers):
     annotated = pil_img.copy()
     draw = ImageDraw.Draw(annotated)
-    box_colors = [
-        (16, 185, 129),
-        (6, 182, 212),
-        (245, 158, 11),
-        (168, 85, 247),
-        (236, 72, 153)
+    
+    # Subdued scientific palette (CAD style)
+    cad_colors = [
+        (63, 185, 80),    # Subdued Emerald
+        (88, 166, 255),   # Slate Blue
+        (210, 153, 34),   # Ochre
+        (188, 140, 255),  # Muted Lavender
+        (247, 120, 186)   # Subdued Rose
     ]
     
     for item in detected_flowers:
@@ -523,13 +493,17 @@ def draw_flower_boxes(pil_img, detected_flowers):
         x1, y1, x2, y2 = item["box"]
         sp_name = item["species"]
         sim = item["similarity"]
-        col = box_colors[(i - 1) % len(box_colors)]
+        col = cad_colors[(i - 1) % len(cad_colors)]
         
-        draw.rectangle([x1, y1, x2, y2], outline=col, width=4)
-        label_txt = f"[{i}] {sp_name} ({sim:.1f}%)"
-        tag_w = len(label_txt) * 8 + 14
-        draw.rectangle([x1, max(0, y1 - 24), x1 + tag_w, y1], fill=col)
-        draw.text((x1 + 6, max(0, y1 - 20)), label_txt, fill=(11, 19, 32))
+        # 2px precision stroke
+        draw.rectangle([x1, y1, x2, y2], outline=col, width=2)
+        
+        # Clean CAD-style mini tag
+        label_txt = f"REG #{i}: {sp_name} [{sim:.1f}%]"
+        tag_w = len(label_txt) * 7 + 10
+        draw.rectangle([x1, max(0, y1 - 18), x1 + tag_w, y1], fill=(22, 27, 34))
+        draw.rectangle([x1, max(0, y1 - 18), x1 + tag_w, y1], outline=col, width=1)
+        draw.text((x1 + 5, max(0, y1 - 15)), label_txt, fill=(230, 237, 243))
         
     return annotated
 
@@ -608,79 +582,73 @@ def resolve_botanical_taxonomy(crop_or_full_img, provider, species_meta_df, defa
 
 with st.sidebar:
     st.markdown("""
-    <div class="sidebar-brand-card">
-        <div style="display: flex; justify-content: space-between; align-items: center;">
-            <div class="sidebar-brand-title">🌿 PlantCLEF AI</div>
-            <span class="hero-tag tag-green" style="font-size: 0.68rem; padding: 2px 8px;">
-                <span class="pulse-dot"></span> READY
-            </span>
-        </div>
-        <div class="sidebar-brand-sub">ระบบวิเคราะห์และจำแนกแปลงพืชธรรมชาติ</div>
+    <div style="padding-bottom: 12px; margin-bottom: 12px; border-bottom: 1px solid #30363d;">
+        <div style="font-size: 0.95rem; font-weight: 600; color: #e6edf3; letter-spacing: -0.01em;">PlantCLEF Control Panel</div>
+        <div style="font-size: 0.74rem; color: #8b949e; margin-top: 2px;">Vegetation Quadrat Diagnostic System</div>
     </div>
     """, unsafe_allow_html=True)
     
-    st.markdown('<div class="sidebar-section-label">📸 แหล่งที่มาของภาพสำรวจ</div>', unsafe_allow_html=True)
+    st.markdown('<div class="sidebar-section-title">Image Acquisition Source</div>', unsafe_allow_html=True)
     input_mode = st.radio(
-        "โหมดการนำเข้า:",
-        ["เลือกภาพตัวอย่างจากระบบ", "อัปโหลดภาพของคุณเอง"],
+        "Input Mode:",
+        ["Standard Reference Plot", "Custom Image Upload"],
         label_visibility="collapsed"
     )
     
     sample_choice = None
-    if input_mode == "เลือกภาพตัวอย่างจากระบบ":
+    if input_mode == "Standard Reference Plot":
         sample_options = {
-            "🏔️ แปลงพืชแอลป์ (Alpine Plot - CBN)": "sample_alpine_cbn.jpg",
-            "🌾 แปลงทุ่งหญ้าเมดิเตอร์เรเนียน (LISAH)": "sample_mediterranean_lisah.jpg",
-            "🌸 แปลงคุ้มครองความหลากหลาย (GUARDEN)": "sample_guarden_biodiversity.jpg"
+            "Plot CBN-01: Alpine Ecosystem (CBN)": "sample_alpine_cbn.jpg",
+            "Plot LISAH-04: Mediterranean Agrosystem (LISAH)": "sample_mediterranean_lisah.jpg",
+            "Plot GUARDEN-02: Protected Biodiversity Zone (GUARDEN)": "sample_guarden_biodiversity.jpg"
         }
-        selected_sample_label = st.selectbox("เลือกแปลงสำรวจ:", list(sample_options.keys()))
+        selected_sample_label = st.selectbox("Select Target Plot:", list(sample_options.keys()))
         sample_choice = sample_options[selected_sample_label]
     
-    st.markdown('<div style="height: 10px;"></div>', unsafe_allow_html=True)
-    st.markdown('<div class="sidebar-section-label">🔍 ตรวจจับดอกไม้ (Floral AI)</div>', unsafe_allow_html=True)
-    enable_detection = st.checkbox("ตีกรอบระบุตำแหน่งดอกไม้ในแปลง", value=True)
-    max_flowers = st.slider("จำนวนดอกไม้สูงสุดที่ตรวจจับ:", min_value=1, max_value=5, value=3)
+    st.markdown('<div class="sidebar-section-title">Computer Vision Parameters</div>', unsafe_allow_html=True)
+    enable_detection = st.checkbox("Enable Floral Region Localization", value=True)
+    max_flowers = st.slider("Maximum Bounding Boxes:", min_value=1, max_value=5, value=3)
     
-    st.markdown('<div style="height: 10px;"></div>', unsafe_allow_html=True)
-    st.markdown('<div class="sidebar-section-label">📊 การสืบค้นพฤกษศาสตร์</div>', unsafe_allow_html=True)
-    top_k = st.slider("จำนวนชนิดพืชในตาราง Top-K Inspector:", min_value=3, max_value=8, value=5)
+    st.markdown('<div class="sidebar-section-title">Taxonomic Retrieval Depth</div>', unsafe_allow_html=True)
+    top_k = st.slider("Top-K Candidate Depth:", min_value=3, max_value=8, value=5)
     
     st.markdown("""
-    <div class="dev-card">
-        <div class="dev-title">👥 คณะผู้พัฒนาระบบ</div>
-        <div class="dev-item">
-            <div class="dev-avatar">PP</div>
-            <div>
-                <div class="dev-name">ปิยังกูร ปัสสาวะกัง</div>
-                <div class="dev-id">ID: 6810405691</div>
-            </div>
+    <div class="audit-box">
+        <div class="audit-header">Operator & System Log</div>
+        <div class="audit-item">
+            <span class="audit-label">Operator</span>
+            <span class="audit-value">P. Passawakang</span>
         </div>
-        <div class="dev-item">
-            <div class="dev-avatar">SP</div>
-            <div>
-                <div class="dev-name">ศิวภูมิ พรหมจรรย์</div>
-                <div class="dev-id">ID: 6810405887</div>
-            </div>
+        <div class="audit-item">
+            <span class="audit-label">Student ID</span>
+            <span class="audit-value">6810405691</span>
+        </div>
+        <div class="audit-item">
+            <span class="audit-label">Investigator</span>
+            <span class="audit-value">S. Promjan</span>
+        </div>
+        <div class="audit-item">
+            <span class="audit-label">Student ID</span>
+            <span class="audit-value">6810405887</span>
+        </div>
+        <div class="audit-item" style="margin-top: 6px; padding-top: 6px; border-top: 1px solid #21262d;">
+            <span class="audit-label">Environment</span>
+            <span class="audit-value">Production v1.4</span>
         </div>
     </div>
     """, unsafe_allow_html=True)
 
+# Workbench Header Bar (IDE / Scientific Data Workbench style)
 st.markdown("""
-<div class="hero-banner">
-    <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 10px;">
-        <div>
-            <span class="hero-tag tag-green">
-                <span class="pulse-dot"></span> HYBRID AI ENGINE ACTIVE
-            </span>
-            <div class="hero-title">Plant Biodiversity Identification Dashboard</div>
-            <div class="hero-sub">ระบบจำแนกชนิดพืชในแปลงสำรวจธรรมชาติด้วยสถาปัตยกรรม Hybrid (DINOv2 ViT-S/14 Feature Extractor + Nearest Neighbors Vector Search)</div>
-        </div>
+<div class="workbench-header">
+    <div class="workbench-title-group">
+        <span class="workbench-title">Plant Biodiversity Diagnostic Workbench</span>
+        <span class="workbench-tag">DINOv2 / Hybrid Engine</span>
+        <span class="workbench-tag">PlantCLEF Evaluation</span>
     </div>
-    <div class="hero-tags">
-        <span class="hero-tag tag-blue">🧬 Backbone: DINOv2 (384-D)</span>
-        <span class="hero-tag tag-green">🎯 Top-1 Accuracy: 96.52%</span>
-        <span class="hero-tag tag-purple">⚡ Latency: &lt; 0.1 ms</span>
-        <span class="hero-tag tag-blue">📚 Catalog: 7,806 Species</span>
+    <div class="status-indicator">
+        <span class="status-dot"></span>
+        <span>PIPELINE: ONLINE</span>
     </div>
 </div>
 """, unsafe_allow_html=True)
@@ -691,40 +659,39 @@ image_to_process = None
 image_info_text = ""
 
 with col_left:
-    st.markdown('<div style="font-weight: 700; font-size: 1.15rem; color: #f8fafc; margin-bottom: 12px;">🌿 Vegetation Quadrat Workspace</div>', unsafe_allow_html=True)
+    st.markdown('<div class="panel-header"><span>Workspace // Image Viewport</span><span class="mono" style="font-size: 0.72rem; color: #8b949e;">Scale: 1:1</span></div>', unsafe_allow_html=True)
     
-    if input_mode == "อัปโหลดภาพของคุณเอง":
+    if input_mode == "Custom Image Upload":
         uploaded_file = st.file_uploader(
-            "ลากไฟล์ภาพแปลงพืชมาวางที่นี่ หรือกด Browse",
+            "Select observation image file (JPEG, PNG, WEBP)",
             type=["jpg", "jpeg", "png", "webp"]
         )
         if uploaded_file is not None:
             image_to_process = Image.open(uploaded_file).convert("RGB")
             w, h = image_to_process.size
-            image_info_text = f"ความละเอียด: {w} x {h} px | {uploaded_file.type}"
+            image_info_text = f"Resolution: {w} x {h} px | {uploaded_file.type}"
     else:
         sample_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "sample_images", sample_choice)
         if os.path.exists(sample_path):
             image_to_process = Image.open(sample_path).convert("RGB")
             w, h = image_to_process.size
-            image_info_text = f"ภาพแปลงมาตรฐาน: {sample_choice} ({w} x {h} px)"
+            image_info_text = f"Reference: {sample_choice} ({w} x {h} px)"
         else:
-            st.warning("ไม่พบไฟล์ภาพตัวอย่างในระบบ")
+            st.warning("Selected sample image not found in repository.")
 
     if image_to_process is None:
         st.markdown("""
-        <div style="border: 2px dashed rgba(56, 189, 248, 0.25); border-radius: 14px; padding: 50px 20px; text-align: center; color: #94a3b8; background: rgba(15, 25, 42, 0.6); backdrop-filter: blur(8px);">
-            <div style="font-size: 2.2rem; margin-bottom: 8px;">📷</div>
-            <div style="font-size: 1.05rem; font-weight: 700; color: #f1f5f9;">ยังไม่มีข้อมูลภาพแปลงสำรวจ</div>
-            <div style="font-size: 0.85rem; margin-top: 4px; color: #64748b;">โปรดอัปโหลดภาพ หรือเลือกภาพตัวอย่างจากเมนู Control Center เพื่อเริ่มการวิเคราะห์</div>
+        <div class="empty-viewport">
+            <div class="empty-title">No Vegetation Plot Loaded</div>
+            <div class="empty-desc">Select a standard reference plot or upload a field observation image from the control panel.</div>
         </div>
         """, unsafe_allow_html=True)
 
 with col_right:
-    st.markdown('<div style="font-weight: 700; font-size: 1.15rem; color: #f8fafc; margin-bottom: 12px;">📊 Diagnostic & Telemetry Panel</div>', unsafe_allow_html=True)
+    st.markdown('<div class="panel-header"><span>Diagnostic Analysis // Telemetry</span><span class="mono" style="font-size: 0.72rem; color: #8b949e;">Status: Ready</span></div>', unsafe_allow_html=True)
     
     if image_to_process is not None:
-        with st.spinner("กำลังประมวลผลเวกเตอร์ลักษณะภาพ DINOv2 และสืบค้นคลังพฤกษศาสตร์..."):
+        with st.spinner("Extracting DINOv2 latent representations and querying reference catalog..."):
             start_time = time.time()
             
             processor, dino_model, device = load_feature_extractor()
@@ -793,60 +760,68 @@ with col_right:
             species_meta_df,
             default_rank=0
         )
-        organ_name = "ดอก (Flower)" if primary_crop is not None else "แปลงพืชธรรมชาติ (Quadrat)"
+        organ_name = "Floral Organ (Flower)" if primary_crop is not None else "Vegetation Quadrat (Plot)"
         
         provider_details = {
-            "CBN": "เทือกเขาแอลป์และพีเรนีส (Conservatoire Botanique National)",
-            "LISAH": "ทุ่งหญ้าและพื้นที่เกษตรเมดิเตอร์เรเนียน (LISAH Agrosystem)",
-            "GUARDEN": "เขตคุ้มครองความหลากหลายทางชีวภาพ (GUARDEN Biodiversity)",
-            "RNNB": "เขตอนุรักษ์ธรรมชาติแห่งชาติ (National Nature Reserve)",
-            "OPTMix": "แปลงทดลองป่าไม้ผสมผสาน (OPTMix Mixed Forest)"
+            "CBN": "Alpine and Pyrenean Highlands (CBN)",
+            "LISAH": "Mediterranean Agriculture Ecosystem (LISAH)",
+            "GUARDEN": "Protected Biodiversity Reserve (GUARDEN)",
+            "RNNB": "National Nature Reserve (RNNB)",
+            "OPTMix": "Mixed Experimental Forest Plots (OPTMix)"
         }
-        habitat_desc = provider_details.get(predicted_provider, "แปลงสำรวจธรรมชาติทั่วไป")
+        habitat_desc = provider_details.get(predicted_provider, "Standard Survey Plots")
         
         st.markdown(f"""
-        <div class="sci-card">
-            <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+        <div class="station-card">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
                 <div>
-                    <span class="badge-sci badge-emerald">PRIMARY IDENTIFICATION</span>
-                    <span class="badge-sci badge-cyan">{predicted_provider}</span>
-                    <span class="badge-sci badge-purple">{organ_name}</span>
-                    <div class="species-name">{scientific_name}</div>
-                    <div style="color: rgb(148, 163, 184); font-size: 0.9rem; margin-top: 4px;">
-                        วงศ์ (Family): <b style="color: rgb(248, 250, 252);">{family_name}</b> | 
-                        สกุล (Genus): <b style="color: rgb(248, 250, 252);">{genus_name}</b>
-                    </div>
-                    <div style="color: rgb(100, 116, 139); font-size: 0.8rem; margin-top: 2px;">
-                        สภาพแวดล้อม: {habitat_desc}
-                    </div>
+                    <span class="tag-chip tag-chip-active">PRIMARY TAXONOMIC RESOLUTION</span>
+                    <span class="tag-chip">ECOSYSTEM: {predicted_provider}</span>
+                    <span class="tag-chip">{organ_name}</span>
+                </div>
+                <div style="font-family: 'JetBrains Mono', monospace; font-size: 0.82rem; color: #3fb950; font-weight: 600;">
+                    {top_similarity:.2f}% CONFIDENCE
                 </div>
             </div>
-            <div style="margin-top: 14px;">
-                <div style="display: flex; justify-content: space-between; font-size: 0.82rem; color: rgb(148, 163, 184); margin-bottom: 4px;">
-                    <span>Visual Similarity Metric</span>
-                    <span style="color: rgb(52, 211, 153); font-weight: 700;">{top_similarity:.2f}%</span>
-                </div>
+            <div class="species-heading">{scientific_name}</div>
+            <div class="species-meta-sub">Taxonomic Rank: Species Level | Reference Index Match</div>
+            
+            <div class="data-row">
+                <span class="data-label">Family</span>
+                <span class="data-value">{family_name}</span>
+            </div>
+            <div class="data-row">
+                <span class="data-label">Genus</span>
+                <span class="data-value">{genus_name}</span>
+            </div>
+            <div class="data-row">
+                <span class="data-label">Provenance Environment</span>
+                <span class="data-value">{habitat_desc}</span>
+            </div>
+            <div class="data-row">
+                <span class="data-label">Diagnostic Metric</span>
+                <span class="data-value-mono">Cosine NearestNeighbors (L2-Normalized)</span>
             </div>
         </div>
         """, unsafe_allow_html=True)
         st.progress(min(1.0, top_similarity / 100.0))
         
         if detected_flowers:
-            st.markdown('<div style="font-weight: 700; font-size: 1.05rem; color: rgb(248, 250, 252); margin-top: 14px; margin-bottom: 6px;">Localized Species Inspector (ตรวจจับแยกช่อดอก)</div>', unsafe_allow_html=True)
+            st.markdown('<div class="panel-header" style="margin-top: 14px; margin-bottom: 6px;"><span>Localized Floral Inspector</span><span class="mono" style="font-size: 0.72rem;">Regions: ' + str(len(detected_flowers)) + '</span></div>', unsafe_allow_html=True)
             flower_summary_data = []
             for df in detected_flowers:
                 flower_summary_data.append({
-                    "กรอบดอกไม้": f"ดอกไม้ที่ {df['index']}",
-                    "ชื่อวิทยาศาสตร์ (Species)": df["species"],
-                    "วงศ์ (Family)": df["family"],
-                    "สกุล (Genus)": df["genus"],
-                    "ความมั่นใจ": f"{df['similarity']:.1f}%"
+                    "Region": f"Region #{df['index']}",
+                    "Scientific Species": df["species"],
+                    "Family": df["family"],
+                    "Genus": df["genus"],
+                    "Confidence": f"{df['similarity']:.1f}%"
                 })
             st.dataframe(pd.DataFrame(flower_summary_data), use_container_width=True, hide_index=True)
         elif enable_detection:
-            st.info("ไม่พบตำแหน่งดอกไม้บานเด่นชัดในแปลงสำรวจนี้ (ตรวจพบเรือนยอดใบและพืชคลุมดินธรรมชาติ)")
+            st.markdown('<div style="font-size: 0.8rem; color: #8b949e; padding: 8px 0;">No prominent floral blooms detected in active plot (canopy/foliage dominant).</div>', unsafe_allow_html=True)
             
-        st.markdown('<div style="font-weight: 700; font-size: 1.05rem; color: rgb(248, 250, 252); margin-top: 14px; margin-bottom: 6px;">Top-K Nearest Botanical Candidates (คลังพืชใกล้เคียง)</div>', unsafe_allow_html=True)
+        st.markdown('<div class="panel-header" style="margin-top: 14px; margin-bottom: 6px;"><span>Top-K Botanical Candidates</span><span class="mono" style="font-size: 0.72rem;">Depth: ' + str(top_k) + '</span></div>', unsafe_allow_html=True)
         
         provider_families = {
             "CBN": ["Ranunculaceae", "Campanulaceae", "Gentianaceae", "Saxifragaceae", "Caryophyllaceae", "Asteraceae"],
@@ -868,50 +843,50 @@ with col_right:
             sp_row = prov_flora.iloc[(idx + rank) % len(prov_flora)]
             
             matches_data.append({
-                "อันดับ": rank,
-                "ชื่อวิทยาศาสตร์": sp_row.get("species", "-"),
-                "วงศ์ (Family)": sp_row.get("family", "-"),
-                "สกุล (Genus)": sp_row.get("genus", "-"),
-                "ถิ่นกำเนิด": ref_provider,
-                "ความคล้ายคลึง": f"{sim_pct:.2f}%",
-                "แปลงอ้างอิง": ref_quadrat
+                "Rank": rank,
+                "Scientific Species": sp_row.get("species", "-"),
+                "Family": sp_row.get("family", "-"),
+                "Genus": sp_row.get("genus", "-"),
+                "Provenance": ref_provider,
+                "Cosine Similarity": f"{sim_pct:.2f}%",
+                "Reference Quadrat ID": ref_quadrat
             })
             
         matches_df = pd.DataFrame(matches_data)
         st.dataframe(matches_df, use_container_width=True, hide_index=True)
         
         st.markdown(f"""
-        <div class="sci-card" style="margin-top: 16px;">
-            <div style="font-size: 0.85rem; font-weight: 700; color: rgb(148, 163, 184); text-transform: uppercase; letter-spacing: 0.5px;">System Telemetry HUD</div>
-            <div class="telemetry-grid">
-                <div class="telemetry-card">
-                    <div class="telemetry-title">Model Status</div>
-                    <div class="telemetry-value" style="color: rgb(52, 211, 153);">Active</div>
-                    <div class="telemetry-sub">Ready for query</div>
+        <div style="margin-top: 14px;">
+            <div class="panel-header"><span>System Telemetry HUD</span><span class="mono" style="font-size: 0.72rem;">Online</span></div>
+            <div class="hud-grid">
+                <div class="hud-tile">
+                    <div class="hud-tile-title">System Status</div>
+                    <div class="hud-tile-value" style="color: #3fb950;">ACTIVE</div>
+                    <div class="hud-tile-meta">L2-Normalized</div>
                 </div>
-                <div class="telemetry-card">
-                    <div class="telemetry-title">Latency</div>
-                    <div class="telemetry-value">{latency_ms} ms</div>
-                    <div class="telemetry-sub">{inference_time:.3f} seconds</div>
+                <div class="hud-tile">
+                    <div class="hud-tile-title">Inference Latency</div>
+                    <div class="hud-tile-value">{latency_ms} ms</div>
+                    <div class="hud-tile-meta">{inference_time:.3f} s total</div>
                 </div>
-                <div class="telemetry-card">
-                    <div class="telemetry-title">Embedding</div>
-                    <div class="telemetry-value" style="color: rgb(34, 211, 238);">384 D</div>
-                    <div class="telemetry-sub">DINOv2 ViT-S/14</div>
+                <div class="hud-tile">
+                    <div class="hud-tile-title">Embedding Dimension</div>
+                    <div class="hud-tile-value">384 D</div>
+                    <div class="hud-tile-meta">DINOv2 ViT-S/14</div>
                 </div>
-                <div class="telemetry-card">
-                    <div class="telemetry-title">Architecture</div>
-                    <div class="telemetry-value" style="font-size: 0.95rem; color: rgb(192, 132, 252); margin-top: 6px;">Hybrid</div>
-                    <div class="telemetry-sub">k-NN + Ensemble</div>
+                <div class="hud-tile">
+                    <div class="hud-tile-title">Vector Index</div>
+                    <div class="hud-tile-value">k-NN</div>
+                    <div class="hud-tile-meta">1,472 Reference Plots</div>
                 </div>
             </div>
         </div>
         """, unsafe_allow_html=True)
     else:
         st.markdown("""
-        <div style="border: 1px solid rgb(30, 48, 74); border-radius: 12px; padding: 40px 20px; text-align: center; color: rgb(100, 116, 139); background-color: rgb(15, 25, 42);">
-            <div style="font-size: 1rem; font-weight: 600;">รอการนำเข้าข้อมูลภาพแปลงสำรวจ</div>
-            <div style="font-size: 0.82rem; margin-top: 4px;">แผงวิเคราะห์เชิงลึกและ Telemetry จะทำงานทันทีเมื่อได้รับภาพ</div>
+        <div style="border: 1px dashed var(--border-color); border-radius: 6px; padding: 40px 20px; text-align: center; color: var(--text-secondary); background-color: var(--bg-surface);">
+            <div style="font-size: 0.9rem; font-weight: 600; color: var(--text-primary);">Awaiting Input Stream</div>
+            <div style="font-size: 0.78rem; margin-top: 4px; color: var(--text-tertiary);">Diagnostic evaluation and telemetry modules will initialize upon image receipt.</div>
         </div>
         """, unsafe_allow_html=True)
 
@@ -919,8 +894,8 @@ with col_left:
     if image_to_process is not None:
         if enable_detection and 'detected_flowers' in locals() and detected_flowers:
             display_img = draw_flower_boxes(image_to_process, detected_flowers)
-            caption_text = f"{image_info_text} | ตรวจพบตำแหน่งดอกไม้ {len(detected_flowers)} ตำแหน่ง"
+            caption_text = f"{image_info_text} | Localized Floral Regions: {len(detected_flowers)}"
         else:
             display_img = image_to_process
-            caption_text = f"{image_info_text} | แปลงพืชธรรมชาติ (Vegetation Plot)"
+            caption_text = f"{image_info_text} | Survey Plot (Full Viewport)"
         st.image(display_img, use_container_width=True, caption=caption_text)
